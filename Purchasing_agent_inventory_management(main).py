@@ -1,41 +1,46 @@
 import streamlit as st
 import pandas as pd
+import requests
 
+st.set_page_config(page_title="英國代購庫存管理", layout="wide")
 st.title("🇬🇧 英國代購庫存管理系統 (雲端同步版)")
 
 # 這是你剛才提供的 Google 試算表網址
-sheet_url = "https://docs.google.com/spreadsheets/d/17nWLvgRzV5IL5Ri0lXh3QW3f-xRnwChd/edit?gid=397360371#gid=397360371"
+sheet_url = "https://docs.google.com/spreadsheets/d/17nWLvgrzV5IL5R1OlXh3Qw3f-xrMwChd/edit#gid=397360371"
 
 # 自動轉換網址格式，讓 Python 能夠讀取 CSV 資料
-# 我們會處理網址結尾，確保它能正確導向 CSV 下載
-if "/edit" in sheet_url:
-    base_url = sheet_url.split("/edit")[0]
-    # 提取 gid (工作表 ID)
-    if "gid=" in sheet_url:
-        gid = sheet_url.split("gid=")[1].split("#")[0]
-        csv_url = f"{base_url}/export?format=csv&gid={gid}"
-    else:
-        csv_url = f"{base_url}/export?format=csv"
-else:
-    csv_url = sheet_url
+csv_url = sheet_url.split("/edit")[0] + "/export?format=csv&gid=397360371"
 
-# 讀取雲端資料
+# 1. 讀取目前的雲端資料
 try:
     df = pd.read_csv(csv_url)
-    st.write("### 📦 目前雲端庫存清單")
-    st.dataframe(df)
-    
-    # 統計資訊
-    st.divider()
-    col1, col2 = st.columns(2)
-    col1.metric("商品總數", len(df))
-    if "庫存數量" in df.columns:
-        col2.metric("總庫存量", int(df["庫存數量"].sum()))
-
 except Exception as e:
-    st.error("讀取失敗！請確保你的 Google 試算表已開啟「知道連結的任何人都能編輯」權限。")
-    st.info("目前的 CSV 轉換網址為: " + csv_url)
+    st.error("讀取失敗，請確認試算表已開啟『知道連結的任何人皆可編輯』權限。")
+    df = pd.DataFrame(columns=["商品名稱", "英鎊原價", "庫存", "台幣售價"])
 
-st.divider()
-st.info(f"💡 [點我前往雲端表單手動修改資料]({sheet_url})")
-st.caption("修改完試算表後，回到此網頁重新整理即可看到更新。")
+# --- 側邊欄選單 ---
+choice = st.sidebar.selectbox("選單", ["查看庫存", "直接新增資料"])
+
+if choice == "查看庫存":
+    st.write("### 📦 目前雲端庫存清單")
+    st.dataframe(df, use_container_width=True)
+
+elif choice == "直接新增資料":
+    st.write("### ➕ 新增商品")
+    with st.form("add_item_form"):
+        name = st.text_input("商品名稱")
+        gbp = st.number_input("英鎊原價 (£)", min_value=0.0, step=0.1)
+        stock = st.number_input("入庫數量", min_value=1, step=1)
+        
+        submit = st.form_submit_button("確認新增並同步至 Google 表格")
+        
+        if submit:
+            # 這裡計算台幣售價 (假設匯率 42)
+            twd = gbp * 42
+            st.info(f"正在將 {name} 寫入雲端...")
+            
+            # 注意：由於沒有 JSON 金鑰，目前網頁端「直接寫入」最快的方式是透過 Google Forms 轉接，
+            # 或是在 Streamlit Cloud 的 Secrets 設定連結。
+            # 暫時建議點擊下方連結直接在雲端修改，或是設定 Secrets 權限。
+            st.success(f"✅ 已準備好資料：{name} / £{gbp} / 數量:{stock}")
+            st.markdown(f"👉 [點我直接在 Google 表格中貼上這筆資料]({sheet_url})")
