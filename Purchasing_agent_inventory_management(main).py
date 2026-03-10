@@ -29,7 +29,7 @@ choice = st.sidebar.selectbox("功能選單", menu)
 # 4. 讀取資料 (不指定名稱，自動抓第一個分頁)
 try:
     # 直接讀取，不帶 worksheet 參數，避免名稱不對報錯
-    df = conn.read(spreadsheet=st.secrets["gsheet_url"], ttl=0)
+df = conn.read(spreadsheet=st.secrets["gsheet_url"], ttl=0)
     # 移除空行
     df = df.dropna(how="all")
 except Exception as e:
@@ -70,3 +70,4 @@ elif choice == "➕ 新增商品" and is_admin:
             conn.update(spreadsheet=st.secrets["gsheet_url"], data=updated_df)
             st.success(f"✅ 【{name}】已成功寫入雲端表單！")
             st.cache_data.clear() # 清除快取以便下次讀取看到最新資料
+
