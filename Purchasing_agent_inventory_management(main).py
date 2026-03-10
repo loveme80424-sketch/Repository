@@ -5,7 +5,7 @@ from datetime import datetime
 
 # 1. 基本設定
 ADMIN_PASSWORD = "jennyrose00" 
-SHEET_URL = "https://docs.google.com/spreadsheets/d/17nWLvgRzV5IL5Ri0lXh3QW3f-xRnwChd/edit?usp=drive_link&ouid=117663170755599340480&rtpof=true&sd=true"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1t18JsCZH1frSZGG2JqGjQnw3zO6dHMukwk_WK8UUVww/edit?gid=397360371#gid=397360371"
 
 st.set_page_config(page_title="英國代購管理系統", layout="wide")
 st.title("🇬🇧 英國代購管理系統 (庫存與銷售同步)")
@@ -89,3 +89,4 @@ elif choice == "📊 查看銷售報表":
     st.write("### 📈 歷史銷售紀錄")
     sales_data = conn.read(spreadsheet=SHEET_URL, worksheet="銷售紀錄", ttl=0)
     st.dataframe(sales_data, use_container_width=True)
+
