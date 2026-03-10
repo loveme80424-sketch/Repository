@@ -1,3 +1,4 @@
+from datetime import datetime
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
@@ -75,3 +76,4 @@ with st.sidebar:
             else:
                 # 如果是銷貨但找不到商品，給予提示
                 st.warning(f"⚠️ 找不到商品「{item_name}」，無法執行銷貨扣除。")
+
