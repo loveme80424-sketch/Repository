@@ -3,8 +3,8 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # 1. 密碼與網址設定
-ADMIN_PASSWORD = "你的專屬密碼" 
-SHEET_URL = "你的Google試算表網址"
+ADMIN_PASSWORD = "jennyrose00" 
+SHEET_URL = "https://docs.google.com/spreadsheets/d/17nWLvgRzV5IL5Ri0lXh3QW3f-xRnwChd/edit?gid=397360371#gid=397360371"
 
 st.title("🇬🇧 英國代購庫存管理系統 (完全同步版)")
 
@@ -56,3 +56,4 @@ elif choice == "直接新增商品" and is_admin:
             updated_df = pd.concat([existing_data, new_entry], ignore_index=True)
             conn.update(spreadsheet=SHEET_URL, data=updated_df)
             st.success(f"✅ {new_name} 已成功寫入雲端表格！")
+
