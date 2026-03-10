@@ -4,7 +4,7 @@ import pandas as pd
 
 # 1. 密碼與網址設定
 ADMIN_PASSWORD = "jennyrose00" 
-SHEET_URL = "https://docs.google.com/spreadsheets/d/17nWLvgRzV5IL5Ri0lXh3QW3f-xRnwChd/edit?gid=397360371#gid=397360371"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/17nWLvgRzV5IL5Ri0lXh3QW3f-xRnwChd/edit?usp=drive_link&ouid=117663170755599340480&rtpof=true&sd=true"
 
 st.title("🇬🇧 英國代購庫存管理系統 (完全同步版)")
 
@@ -56,4 +56,5 @@ elif choice == "直接新增商品" and is_admin:
             updated_df = pd.concat([existing_data, new_entry], ignore_index=True)
             conn.update(spreadsheet=SHEET_URL, data=updated_df)
             st.success(f"✅ {new_name} 已成功寫入雲端表格！")
+
 
