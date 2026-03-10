@@ -1,79 +1,89 @@
-from datetime import datetime
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
+import pandas as pd
+from datetime import datetime
 
+# 1. 初始化 Google Sheets 連線 (使用 Streamlit Secrets)
 def init_gspread():
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    
-    # 讀取雲端 Secrets
+    # 這裡會讀取你在 Streamlit 網頁設定的 Secrets
     creds_info = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_info, scopes=scope)
-    
     client = gspread.authorize(creds)
-    # 這是你目前使用的 Inventory_System 試算表 ID
-    spreadsheet_id = '1Uyr_GSbMw53qBc7ZQ81ociX2eCll5B0Qrmudw1YRvaA' 
+    
+    # 請確保這是你最新的試算表 ID
+    spreadsheet_id = '1Uyr_GSbMw53qBc7ZQ81ociX2eCll5B0Qrmudw1YRvaA'
     return client.open_by_key(spreadsheet_id)
 
-# 載入分頁
-try:
+# 2. 更新庫存與紀錄的邏輯
+def update_data(item_name, qty, action_type, note, price_gbp):
     sh = init_gspread()
     inv_wks = sh.worksheet("庫存")
     hist_wks = sh.worksheet("紀錄")
-except Exception as e:
-    st.error(f"連線失敗：{e}")
-    st.stop()
-
-st.title("🧸 英國代購進銷貨系統")
-
-# 左側邊欄：輸入介面
-with st.sidebar:
-    st.header("➕ 新增交易")
     
-    with st.form("input_form", clear_on_submit=True):
-        # 取得現有商品清單 (A欄)
-        existing_items = [row[0] for row in inv_wks.get_all_values()[1:]]
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+    
+    # A. 寫入【紀錄】分頁 (日期, 類型, 名稱, 數量, 英鎊單價, 備註)
+    hist_wks.append_row([now_str, action_type, item_name, qty, price_gbp, note])
+    
+    # B. 更新【庫存】分頁
+    cell = inv_wks.find(item_name)
+    if cell:
+        # 根據你的表格欄位：D欄(4)是進貨，E欄(5)是銷貨
+        col_to_update = 4 if action_type == "進貨" else 5
         
-        item_name = st.selectbox("商品名稱", options=["--手動新增--"] + existing_items)
-        if item_name == "--手動新增--":
-            item_name = st.text_input("輸入新商品名稱")
-            
-        qty = st.number_input("數量", min_value=1, step=1)
+        # 讀取原本數值 (若空白則設為 0)
+        current_val = inv_wks.cell(cell.row, col_to_update).value
+        current_val = int(current_val) if current_val and str(current_val).isdigit() else 0
         
-        # 直接輸入英鎊價格
-        price_gbp = st.number_input("單價 (英鎊 £)", min_value=0.0, step=0.01)
-        
-        action_type = st.radio("動作類型", ["進貨", "銷貨"])
-        submit_button = st.form_submit_button("確認提交並更新雲端")
+        # 累加新數量 (銷貨如果是輸入正數，這裡要用加的，因為公式是 進+銷)
+        # 如果你銷貨習慣打 5，表格就會變 -5，這裡我們統一用加法
+        new_val = current_val + qty
+        inv_wks.update_cell(cell.row, col_to_update, new_val)
+        return True
+    else:
+        st.error(f"找不到商品：{item_name}，請先手動在 Excel 新增該品項名稱。")
+        return False
 
-    if submit_button and item_name:
-        today = datetime.now().strftime('%Y-%m-%d %H:%M')
-        
-        # A. 寫入「紀錄」分頁
-        # 格式：時間, 類型, 商品, 數量, 英鎊單價
-        hist_wks.append_row([today, action_type, item_name, qty, price_gbp])
-        
-        # B. 更新「庫存」分頁
-        cell = inv_wks.find(item_name)
-        if cell:
-            # 依據你的試算表結構：C欄(3)是英鎊，E欄(5)是現貨數量
-            current_qty = int(inv_wks.cell(cell.row, 5).value or 0)
-            new_qty = current_qty + qty if action_type == "進貨" else current_qty - qty
+# --- Streamlit 介面 ---
+st.title("🇬🇧 英國代購雲端庫存系統")
+
+# 顯示目前庫存 (從 Google Sheets 讀取)
+if st.button("更新/讀取最新庫存"):
+    sh = init_gspread()
+    df = pd.DataFrame(sh.worksheet("庫存").get_all_records())
+    st.dataframe(df)
+
+st.divider()
+
+# 輸入表單
+with st.form("inventory_form", clear_on_submit=True):
+    st.subheader("新增進銷貨紀錄")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        item = st.text_input("娃娃名稱 (需與 Excel 一致)")
+        action = st.selectbox("動作類型", ["進貨", "銷貨"])
+    
+    with col2:
+        # 如果是銷貨，自動建議輸入負數，或者你在這裡處理
+        qty = st.number_input("數量", step=1)
+        gbp = st.number_input("英鎊單價 (選填)", min_value=0.0)
+    
+    note = st.text_input("備註 (例如：客人王小姐預訂)")
+    
+    submit = st.form_submit_button("確認提交至雲端")
+    
+    if submit:
+        if item:
+            # 自動處理銷貨數量為負數 (為了符合你表格 進+銷=現貨 的邏輯)
+            final_qty = qty if action == "進貨" else -abs(qty)
             
-            # 更新數量與英鎊價格
-            inv_wks.update_cell(cell.row, 5, new_qty)
-            inv_wks.update_cell(cell.row, 3, price_gbp)
-            
-            st.success(f"✅ {item_name} 已更新！目前庫存：{new_qty}")
+            success = update_data(item, final_qty, action, note, gbp)
+            if success:
+                st.success(f"✅ 已成功同步！品項：{item} | 數量：{final_qty} | 備註：{note}")
         else:
-            if action_type == "進貨":
-                # 新商品：娃娃名稱(A), 款式(B), 英鎊(C), 台幣(D), 數量(E)
-                # D欄暫時留空，或依需求填入資料
-                new_row = [item_name, "", price_gbp, "", qty] 
-                inv_wks.append_row(new_row)
-                
-                st.success(f"🆕 新商品 {item_name} 已加入庫存，數量：{qty}")
-            else:
-                # 如果是銷貨但找不到商品，給予提示
-                st.warning(f"⚠️ 找不到商品「{item_name}」，無法執行銷貨扣除。")
+            st.warning("請輸入娃娃名稱")
 
+st.info("💡 提示：請確保 Google Sheets 的 F 欄公式為 `=D2+E2`，即可自動計算現貨。")
