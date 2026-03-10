@@ -21,7 +21,8 @@ try:
     
     # 這裡不指定 worksheet，讓它抓取整個試算表物件
     # 如果這裡報錯，代表「網址」或「權限」有問題
-    raw_data = conn.read(spreadsheet=test_url)
+    # 不要寫 worksheet="庫存表"，直接讓它讀取預設的第一張表
+df = conn.read(spreadsheet=st.secrets["gsheet_url"], ttl=0)
     
     st.success("✅ 成功連線到 Google Sheets！")
     st.write("### 📊 偵測到的資料內容：")
@@ -38,3 +39,4 @@ except Exception as e:
     
     st.write("---")
     st.write("📋 **請將上面的紅色錯誤訊息截圖給我，我能直接看出問題在哪。**")
+
