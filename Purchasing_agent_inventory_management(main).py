@@ -1,71 +1,77 @@
 import streamlit as st
-import pandas as pd
-import datetime
-import os
+import gspread
+from google.oauth2.service_account import Credentials
 
-FILE_NAME = '英國代購庫存表.xlsx'
+def init_gspread():
+    scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    
+    # 讀取雲端 Secrets
+    creds_info = st.secrets["gcp_service_account"]
+    creds = Credentials.from_service_account_info(creds_info, scopes=scope)
+    
+    client = gspread.authorize(creds)
+    # 這是你目前使用的 Inventory_System 試算表 ID
+    spreadsheet_id = '1Uyr_GSbMw53qBc7ZQ81ociX2eCll5B0Qrmudw1YRvaA' 
+    return client.open_by_key(spreadsheet_id)
 
+# 載入分頁
+try:
+    sh = init_gspread()
+    inv_wks = sh.worksheet("庫存")
+    hist_wks = sh.worksheet("紀錄")
+except Exception as e:
+    st.error(f"連線失敗：{e}")
+    st.stop()
 
-# 初始化 Excel 檔案
-def init_excel():
-    if not os.path.exists(FILE_NAME):
-        with pd.ExcelWriter(FILE_NAME, engine='openpyxl') as writer:
-            pd.DataFrame(columns=['商品名稱', '目前庫存', '英鎊價格']).to_excel(writer, sheet_name='庫存', index=False)
-            pd.DataFrame(columns=['日期', '類型', '商品名稱', '數量', '單價', '備註']).to_excel(writer,
-                                                                                                sheet_name='紀錄',
-                                                                                                index=False)
+st.title("🧸 英國代購進銷貨系統")
 
+# 左側邊欄：輸入介面
+with st.sidebar:
+    st.header("➕ 新增交易")
+    
+    with st.form("input_form", clear_on_submit=True):
+        # 取得現有商品清單 (A欄)
+        existing_items = [row[0] for row in inv_wks.get_all_values()[1:]]
+        
+        item_name = st.selectbox("商品名稱", options=["--手動新增--"] + existing_items)
+        if item_name == "--手動新增--":
+            item_name = st.text_input("輸入新商品名稱")
+            
+        qty = st.number_input("數量", min_value=1, step=1)
+        
+        # 直接輸入英鎊價格
+        price_gbp = st.number_input("單價 (英鎊 £)", min_value=0.0, step=0.01)
+        
+        action_type = st.radio("動作類型", ["進貨", "銷貨"])
+        submit_button = st.form_submit_button("確認提交並更新雲端")
 
-init_excel()
-
-st.title("🇬🇧 英國代購庫存管理系統")
-
-# --- 側邊欄：輸入區 ---
-st.sidebar.header("新增資料")
-item_name = st.sidebar.text_input("商品名稱")
-qty = st.sidebar.number_input("數量", min_value=1, value=1)
-price = st.sidebar.number_input("單價 (GB)", min_value=0, value=0)
-action_type = st.sidebar.selectbox("動作類型", ["進貨", "銷貨"])
-Remark_name = st.sidebar.text_input("備註")
-
-if st.sidebar.button("確認提交"):
-    # 讀取現有資料
-    inv = pd.read_excel(FILE_NAME, sheet_name='庫存')
-    hist = pd.read_excel(FILE_NAME, sheet_name='紀錄')
-
-    # 更新紀錄
-    new_record = {
-        '日期': datetime.date.today().strftime("%Y-%m-%d"),
-        '類型': action_type,
-        '商品名稱': item_name,
-        '數量': qty,
-        '單價': price,
-        '備註': Remark_name,
-    }
-    hist = pd.concat([hist, pd.DataFrame([new_record])], ignore_index=True)
-
-    # 更新庫存邏輯
-    if item_name in inv['商品名稱'].values:
-        idx = inv[inv['商品名稱'] == item_name].index[0]
-        if action_type == "進貨":
-            inv.at[idx, '目前庫存'] += qty
+    if submit_button and item_name:
+        today = datetime.now().strftime('%Y-%m-%d %H:%M')
+        
+        # A. 寫入「紀錄」分頁
+        # 格式：時間, 類型, 商品, 數量, 英鎊單價
+        hist_wks.append_row([today, action_type, item_name, qty, price_gbp])
+        
+        # B. 更新「庫存」分頁
+        cell = inv_wks.find(item_name)
+        if cell:
+            # 依據你的試算表結構：C欄(3)是英鎊，E欄(5)是現貨數量
+            current_qty = int(inv_wks.cell(cell.row, 5).value or 0)
+            new_qty = current_qty + qty if action_type == "進貨" else current_qty - qty
+            
+            # 更新數量與英鎊價格
+            inv_wks.update_cell(cell.row, 5, new_qty)
+            inv_wks.update_cell(cell.row, 3, price_gbp)
+            
+            st.success(f"✅ {item_name} 已更新！目前庫存：{new_qty}")
         else:
-            inv.at[idx, '目前庫存'] -= qty
-    else:
-        new_inv = {'商品名稱': item_name, '目前庫存': qty, '平均成本': price}
-        inv = pd.concat([inv, pd.DataFrame([new_inv])], ignore_index=True)
-
-    # 存檔
-    with pd.ExcelWriter(FILE_NAME, engine='openpyxl') as writer:
-        inv.to_excel(writer, sheet_name='庫存', index=False)
-        hist.to_excel(writer, sheet_name='紀錄', index=False)
-    st.success(f"已完成 {item_name} 的 {action_type}！")
-
-# --- 主畫面：顯示資料 ---
-st.subheader("📦 目前庫存狀態")
-current_inv = pd.read_excel(FILE_NAME, sheet_name='庫存')
-st.dataframe(current_inv, use_container_width=True)
-
-st.subheader("📜 最近交易紀錄")
-current_hist = pd.read_excel(FILE_NAME, sheet_name='紀錄')
-st.table(current_hist.tail(5))  # 顯示最後 5 筆
+            if action_type == "進貨":
+                # 新商品：娃娃名稱(A), 款式(B), 英鎊(C), 台幣(D), 數量(E)
+                # D欄暫時留空，或依需求填入資料
+                new_row = [item_name, "", price_gbp, "", qty] 
+                inv_wks.append_row(new_row)
+                
+                st.success(f"🆕 新商品 {item_name} 已加入庫存，數量：{qty}")
+            else:
+                # 如果是銷貨但找不到商品，給予提示
+                st.warning(f"⚠️ 找不到商品「{item_name}」，無法執行銷貨扣除。")
