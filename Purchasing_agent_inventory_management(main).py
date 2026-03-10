@@ -1,125 +1,40 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from datetime import datetime
 
-# --- 1. 初始化設定 ---
-ADMIN_PASSWORD = "jennyrose00" 
+st.title("🔍 系統連線診斷工具")
 
-st.set_page_config(page_title="英國代購管理系統", layout="wide")
-st.title("🇬🇧 英國代購庫存與銷售管理系統")
-
-# 讀取隱藏的網址 (從 Secrets 讀取)
+# 1. 檢查 Secrets 是否讀取成功
 try:
-    SHEET_URL = st.secrets["gsheet_url"]
-except:
-    st.error("❌ 尚未在 Streamlit 後台設定 Secrets (gsheet_url)！")
+    test_url = st.secrets["gsheet_url"]
+    st.success(f"✅ 已讀取到 Secrets 網址")
+except Exception as e:
+    st.error(f"❌ 無法讀取 Secrets: {e}")
     st.stop()
 
-# --- 2. 權限驗證 ---
-st.sidebar.header("🔐 管理員登入")
-pw = st.sidebar.text_input("輸入操作密碼", type="password")
-is_admin = (pw == ADMIN_PASSWORD)
-
-if is_admin:
-    st.sidebar.success("✅ 認證成功")
-    menu = ["查看目前庫存", "➕ 新增商品入庫", "🤝 登記售出紀錄", "📊 查看銷售報表"]
-else:
-    st.sidebar.info("🔒 目前為一般檢視模式")
-    menu = ["查看目前庫存"]
-
-choice = st.sidebar.selectbox("切換功能", menu)
-
-# --- 3. 建立雲端連線 ---
+# 2. 嘗試建立連線
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- 4. 功能實作 ---
-
-# 建立連線
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-# 自動抓取「第一個」分頁，避免中文名稱辨識出錯
-all_sheets = conn.read(spreadsheet=st.secrets["gsheet_url"], ttl=0)
-df = all_sheets # 直接讀取預設的第一個分頁
-
-# if choice == "查看目前庫存":
-#     # 讀取庫存分頁
-#     df = conn.read(spreadsheet=SHEET_URL, worksheet="庫存表", ttl=0)
-#     st.write("### 📦 目前雲端庫存清單")
-#     if not df.empty:
-#         st.dataframe(df, use_container_width=True)
-#     else:
-#         st.warning("目前暫無資料，請先新增商品。")
-
-# elif choice == "➕ 新增商品入庫" and is_admin:
-#     st.write("### ➕ 新增商品入庫")
-#     existing_df = conn.read(spreadsheet=SHEET_URL, worksheet="庫存表", ttl=0)
+# 3. 測試讀取：這段會印出所有分頁名稱，幫我們抓錯
+try:
+    st.write("正在嘗試抓取試算表資訊...")
     
-#     with st.form("add_form"):
-#         col1, col2 = st.columns(2)
-#         with col1:
-#             name = st.text_input("商品名稱")
-#             gbp = st.number_input("英鎊原價 (£)", min_value=0.0, step=0.1)
-#         with col2:
-#             stock = st.number_input("入庫數量", min_value=1, step=1)
-#             rate = 42 # 預設匯率
-        
-#         submitted = st.form_submit_button("確認新增並同步雲端")
-        
-#         if submitted and name:
-#             new_row = pd.DataFrame([{
-#                 "商品名稱": name, 
-#                 "英鎊原價": gbp, 
-#                 "台幣售價": round(gbp * rate), 
-#                 "庫存數量": stock
-#             }])
-#             updated_df = pd.concat([existing_df, new_row], ignore_index=True)
-#             conn.update(spreadsheet=SHEET_URL, worksheet="庫存表", data=updated_df)
-#             st.success(f"✅ {name} 已成功入庫！")
-#             st.cache_data.clear()
-
-# elif choice == "🤝 登記售出紀錄" and is_admin:
-#     st.write("### 🤝 售出紀錄登記 (自動扣除庫存)")
-#     inventory_df = conn.read(spreadsheet=SHEET_URL, worksheet="庫存表", ttl=0)
-#     sales_df = conn.read(spreadsheet=SHEET_URL, worksheet="銷售紀錄", ttl=0)
+    # 這裡不指定 worksheet，讓它抓取整個試算表物件
+    # 如果這裡報錯，代表「網址」或「權限」有問題
+    raw_data = conn.read(spreadsheet=test_url)
     
-#     if not inventory_df.empty:
-#         with st.form("sales_form"):
-#             item_to_sell = st.selectbox("選擇商品", inventory_df["商品名稱"].tolist())
-#             sell_num = st.number_input("售出數量", min_value=1, step=1)
-#             sell_date = st.date_input("售出日期", datetime.now())
-#             confirm = st.form_submit_button("執行售出作業")
-            
-#             if confirm:
-#                 idx = inventory_df[inventory_df["商品名稱"] == item_to_sell].index[0]
-#                 current_stock = inventory_df.at[idx, "庫存數量"]
-                
-#                 if current_stock >= sell_num:
-#                     # A. 扣除庫存
-#                     inventory_df.at[idx, "庫存數量"] = current_stock - sell_num
-#                     conn.update(spreadsheet=SHEET_URL, worksheet="庫存表", data=inventory_df)
-                    
-#                     # B. 寫入銷售紀錄
-#                     new_sale = pd.DataFrame([{
-#                         "商品名稱": item_to_sell,
-#                         "售出數量": sell_num,
-#                         "售出日期": sell_date.strftime("%Y-%m-%d")
-#                     }])
-#                     updated_sales = pd.concat([sales_df, new_sale], ignore_index=True)
-#                     conn.update(spreadsheet=SHEET_URL, worksheet="銷售紀錄", data=updated_sales)
-                    
-#                     st.success(f"✅ 銷售成功！{item_to_sell} 庫存剩餘: {inventory_df.at[idx, '庫存數量']}")
-#                     st.cache_data.clear()
-#                 else:
-#                     st.error(f"❌ 庫存不足！(目前剩餘: {current_stock})")
-#     else:
-#         st.error("庫存表中沒有任何商品。")
+    st.success("✅ 成功連線到 Google Sheets！")
+    st.write("### 📊 偵測到的資料內容：")
+    st.dataframe(raw_data)
 
-# elif choice == "📊 查看銷售報表":
-#     st.write("### 📈 歷史銷售明細")
-#     sales_data = conn.read(spreadsheet=SHEET_URL, worksheet="銷售紀錄", ttl=0)
-#     if not sales_data.empty:
-#         st.dataframe(sales_data, use_container_width=True)
-#     else:
-#         st.info("尚無銷售紀錄。")
-
+except Exception as e:
+    st.error("⚠️ 連線失敗診斷報告：")
+    st.code(str(e))
+    
+    if "400" in str(e):
+        st.warning("💡 錯誤代碼 400：通常是網址格式錯誤。請檢查 Secrets 裡的網址是否包含多餘的空白或字元。")
+    if "403" in str(e):
+        st.warning("💡 錯誤代碼 403：權限不足。請再次確認 Google 試算表是否已設為『知道連結的任何人皆可編輯』。")
+    
+    st.write("---")
+    st.write("📋 **請將上面的紅色錯誤訊息截圖給我，我能直接看出問題在哪。**")
