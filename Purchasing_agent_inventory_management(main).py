@@ -1,49 +1,71 @@
 import streamlit as st
 import pandas as pd
+import datetime
+import os
 
-# 1. 密碼鎖
-ADMIN_PASSWORD = "1123" 
+FILE_NAME = '英國代購庫存表.xlsx'
 
-st.title("🇬🇧 英國代購管理 (穩定讀取版)")
 
-# 2. 核心：將 Google Sheets 網址轉換為 CSV 格式 (這行最重要)
-def get_csv_url(url):
-    # 強制將網址結尾換成 export?format=csv，這能繞過 99% 的讀取錯誤
-    if "/edit" in url:
-        return url.split("/edit")[0] + "/export?format=csv"
-    return url
+# 初始化 Excel 檔案
+def init_excel():
+    if not os.path.exists(FILE_NAME):
+        with pd.ExcelWriter(FILE_NAME, engine='openpyxl') as writer:
+            pd.DataFrame(columns=['商品名稱', '目前庫存', '英鎊價格']).to_excel(writer, sheet_name='庫存', index=False)
+            pd.DataFrame(columns=['日期', '類型', '商品名稱', '數量', '單價', '備註']).to_excel(writer,
+                                                                                                sheet_name='紀錄',
+                                                                                                index=False)
 
-# 3. 讀取資料 (直接用 pandas 抓，不透過連線套件)
-try:
-    # 從 Secrets 抓網址並轉換
-    raw_url = st.secrets["gsheet_url"]
-    csv_url = get_csv_url(raw_url)
-    
-    # 讀取資料，不指定分頁名稱，直接讀取預設內容
-    df = pd.read_csv(csv_url)
-    df = df.dropna(how="all") # 移除空行
-    st.success("✅ 資料讀取成功！")
-except Exception as e:
-    st.error(f"❌ 讀取依舊失敗：{e}")
-    st.info("請檢查 Secrets 裡的網址是否正確包在雙引號內。")
-    st.stop()
 
-# 4. 功能顯示
-st.sidebar.header("🔐 權限驗證")
-pw = st.sidebar.text_input("輸入密碼", type="password")
+init_excel()
 
-if pw == ADMIN_PASSWORD:
-    st.write("### 📦 庫存管理模式")
-    # 讓你可以直接在網頁上編輯表格
-    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-    
-    if st.button("💾 下載修改後的報表 (CSV)"):
-        csv = edited_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("點我下載", csv, "updated_inventory.csv", "text/csv")
-        st.info("💡 提醒：此版本為穩定讀取版。修改後請下載並上傳回 Google 表格，或點擊下方連結手動更新。")
-else:
-    st.write("### 📦 目前庫存清單 (唯讀)")
-    st.dataframe(df, use_container_width=True)
+st.title("🇬🇧 英國代購庫存管理系統")
 
-# 5. 直接跳轉編輯
-st.markdown(f"👉 [點我開啟 Google 試算表直接修改資料]({st.secrets['gsheet_url']})")
+# --- 側邊欄：輸入區 ---
+st.sidebar.header("新增資料")
+item_name = st.sidebar.text_input("商品名稱")
+qty = st.sidebar.number_input("數量", min_value=1, value=1)
+price = st.sidebar.number_input("單價 (GB)", min_value=0, value=0)
+action_type = st.sidebar.selectbox("動作類型", ["進貨", "銷貨"])
+Remark_name = st.sidebar.text_input("備註")
+
+if st.sidebar.button("確認提交"):
+    # 讀取現有資料
+    inv = pd.read_excel(FILE_NAME, sheet_name='庫存')
+    hist = pd.read_excel(FILE_NAME, sheet_name='紀錄')
+
+    # 更新紀錄
+    new_record = {
+        '日期': datetime.date.today().strftime("%Y-%m-%d"),
+        '類型': action_type,
+        '商品名稱': item_name,
+        '數量': qty,
+        '單價': price,
+        '備註': Remark_name,
+    }
+    hist = pd.concat([hist, pd.DataFrame([new_record])], ignore_index=True)
+
+    # 更新庫存邏輯
+    if item_name in inv['商品名稱'].values:
+        idx = inv[inv['商品名稱'] == item_name].index[0]
+        if action_type == "進貨":
+            inv.at[idx, '目前庫存'] += qty
+        else:
+            inv.at[idx, '目前庫存'] -= qty
+    else:
+        new_inv = {'商品名稱': item_name, '目前庫存': qty, '平均成本': price}
+        inv = pd.concat([inv, pd.DataFrame([new_inv])], ignore_index=True)
+
+    # 存檔
+    with pd.ExcelWriter(FILE_NAME, engine='openpyxl') as writer:
+        inv.to_excel(writer, sheet_name='庫存', index=False)
+        hist.to_excel(writer, sheet_name='紀錄', index=False)
+    st.success(f"已完成 {item_name} 的 {action_type}！")
+
+# --- 主畫面：顯示資料 ---
+st.subheader("📦 目前庫存狀態")
+current_inv = pd.read_excel(FILE_NAME, sheet_name='庫存')
+st.dataframe(current_inv, use_container_width=True)
+
+st.subheader("📜 最近交易紀錄")
+current_hist = pd.read_excel(FILE_NAME, sheet_name='紀錄')
+st.table(current_hist.tail(5))  # 顯示最後 5 筆
