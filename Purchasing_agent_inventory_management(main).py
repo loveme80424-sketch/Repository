@@ -7,12 +7,13 @@ from datetime import datetime
 # 1. 初始化 Google Sheets 連線
 def init_gspread():
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    # 請確保 st.secrets["gcp_service_account"] 已在 Streamlit Cloud 設定好
     creds_info = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_info, scopes=scope)
     client = gspread.authorize(creds)
-    # 這是你的試算表 ID
-    spreadsheet_id = '1Uyr_GSbMw53qBc7ZQ81ociX2eC115B0Qrmudw1YRvaA'
+    
+    # ✅ 修正後的 ID (請確保引號內完全正確)
+    spreadsheet_id = '1Uyr_GSbMw53qBc7ZQ81ociX2eCll5B0Qrmudw1YRvaA'
+    
     return client.open_by_key(spreadsheet_id)
 
 # 2. 更新資料核心邏輯
@@ -35,9 +36,10 @@ def update_data(item_name, qty, action_type, note, price_gbp):
     except:
         cell = None
 
+    # ... 前面是連線和定義變數 ...
+
     if cell:
-        # 如果找到品項，只更新 C 欄(進貨) 或 D 欄(銷貨)
-        # 第 3 欄是進貨 (C), 第 4 欄是銷貨 (D)
+        # --- 情況 1：找到舊商品 (更新現有的 C 欄或 D 欄) ---
         col_to_update = 3 if action_type == "進貨" else 4
         
         current_val = inv_wks.cell(cell.row, col_to_update).value
@@ -46,19 +48,21 @@ def update_data(item_name, qty, action_type, note, price_gbp):
         except:
             current_val = 0
             
-        new_val = current_val + final_qty
-        # 💡 關鍵：只更新 C 或 D，絕對不碰 E 欄 (第 5 欄)
+        new_val = current_val + (qty if action_type == "進貨" else -qty)
         inv_wks.update_cell(cell.row, col_to_update, new_val)
         st.success(f"✅ 已成功更新庫存：{item_name}")
+        
     else:
-        # 如果是新商品，直接新增一行
-        # 欄位順序：名稱(A), 英鎊(B), 進貨(C), 銷貨(D), 庫存(E), 備註(F)
+        # --- 情況 2：這是新商品 (就是放這裡！) ---
+        # 欄位順序：A名稱, B英鎊, C進貨, D銷貨, E庫存(留空), F備註
         if action_type == "進貨":
             inv_wks.append_row([item_name, price_gbp, qty, 0, "", note])
         else:
+            # 如果第一次建立就是銷貨(雖然少見)，進貨填0，銷貨填負數
             inv_wks.append_row([item_name, 0, 0, -qty, "", note])
+            
         st.info(f"✨ 庫存表已自動新增品項：{item_name}")
-    
+
     return True
 
 # 3. Streamlit 介面
