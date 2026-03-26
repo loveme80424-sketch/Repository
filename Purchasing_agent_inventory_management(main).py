@@ -22,29 +22,41 @@ def update_data(item_name, qty, action_type, note, price_gbp):
     
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
     
-    # A. 先寫入【紀錄】分頁
-    hist_wks.append_row([now_str, action_type, item_name, qty, price_gbp, note])
+    # 1. 寫入【紀錄】分頁 (日期, 類型, 名稱, 數量, 英鎊, 備註)
+    hist_wks.append_row([now_str, action_type, item_name, qty, 0, note])
     
-    # B. 更新【庫存】分頁
+    # 2. 更新【庫存】分頁
     cell = inv_wks.find(item_name)
     
     if cell:
-        # 如果品項已存在，更新現有格子
-        col_to_update = 4 if action_type == "進貨" else 5
-        current_val = inv_wks.cell(cell.row, col_to_update).value
-        # 確保讀到的是數字，如果格子是空的就當 0
-        current_val = int(current_val) if current_val and str(current_val).replace('-','').isdigit() else 0
-        new_val = current_val + qty
-        inv_wks.update_cell(cell.row, col_to_update, new_val)
-        st.success(f"✅ 已更新現有品項：{item_name}")
-    else:
-        # 如果【庫存表】沒有這個名稱，直接新增一行
-        # 欄位順序：A名稱, B英鎊, C台幣(0), D進貨, E銷貨
+        # --- 核心修正：進貨對應第 3 欄(C)，銷貨對應第 4 欄(D) ---
         if action_type == "進貨":
-            inv_wks.append_row([item_name, price_gbp, 0, qty, 0])
+            col_to_update = 3  # C 欄
         else:
-            # 銷貨時若庫存沒品項，進貨填0，銷貨填入該數量
-            inv_wks.append_row([item_name, 0, 0, 0, qty])
+            col_to_update = 4  # D 欄 (銷貨要在這裡更新)
+        
+        # 取得該格原本的數值
+        current_val = inv_wks.cell(cell.row, col_to_update).value
+        try:
+            # 如果格子是空的或是非數字，就從 0 開始算
+            current_val = int(current_val) if current_val else 0
+        except:
+            current_val = 0
+            
+        # 累加數量 (銷貨時 qty 會是負數，例如 10 + (-2) = 8)
+        new_val = current_val + qty
+        
+        # 【重要】只更新指定欄位，絕對不准寫入第 5 欄 (E 欄)
+        inv_wks.update_cell(cell.row, col_to_update, new_val)
+        st.success(f"✅ 已在庫存表更新【{action_type}】：{item_name}")
+        
+    else:
+        # 如果庫存表完全沒有這個品項，直接新增一行
+        # 格式：[名稱(A), 英鎊(B), 進貨(C), 銷貨(D), 庫存公式(E)留空, 備註(F)]
+        if action_type == "進貨":
+            inv_wks.append_row([item_name, price_gbp, qty, 0, "", note])
+        else:
+            inv_wks.append_row([item_name, 0, 0, qty, "", note])
         st.info(f"✨ 庫存表已自動新增新品項：{item_name}")
     
     return True
