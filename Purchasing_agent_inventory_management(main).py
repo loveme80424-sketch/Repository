@@ -22,30 +22,34 @@ def update_data(item_name, qty, action_type, note, price_gbp):
     
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
     
-    # A. 先寫入【紀錄】分頁
-    hist_wks.append_row([now_str, action_type, item_name, qty, price_gbp, note])
+    # 1. 寫入【紀錄】分頁 (維持原樣)
+    hist_wks.append_row([now_str, action_type, item_name, qty, 0, note])
     
-    # B. 更新【庫存】分頁
+    # 2. 更新【庫存】分頁
     cell = inv_wks.find(item_name)
     
     if cell:
-        # 如果品項已存在，更新現有格子
-        col_to_update = 4 if action_type == "進貨" else 5
+        # --- 修改重點：只更新第 3 欄(C) 或 第 4 欄(D) ---
+        col_to_update = 3 if action_type == "進貨" else 4
+        
         current_val = inv_wks.cell(cell.row, col_to_update).value
-        # 確保讀到的是數字，如果格子是空的就當 0
-        current_val = int(current_val) if current_val and str(current_val).replace('-','').isdigit() else 0
+        try:
+            current_val = int(current_val) if current_val else 0
+        except:
+            current_val = 0
+            
         new_val = current_val + qty
+        # 這裡只更新 C 或 D，絕對不要去碰 E 欄 (第 5 欄)！
         inv_wks.update_cell(cell.row, col_to_update, new_val)
-        st.success(f"✅ 已更新現有品項：{item_name}")
+        st.success(f"✅ 已更新：{item_name}")
     else:
-        # 如果【庫存表】沒有這個名稱，直接新增一行
-        # 欄位順序：A名稱, B英鎊, C台幣(0), D進貨, E銷貨
+        # 如果是新商品，直接新增一行，E 欄(第 5 格) 留空，讓公式自己算
+        # 欄位：[名稱, 英鎊, 進貨, 銷貨, "", 備註]
         if action_type == "進貨":
-            inv_wks.append_row([item_name, price_gbp, 0, qty, 0])
+            inv_wks.append_row([item_name, price_gbp, qty, 0, "", note])
         else:
-            # 銷貨時若庫存沒品項，進貨填0，銷貨填入該數量
-            inv_wks.append_row([item_name, 0, 0, 0, qty])
-        st.info(f"✨ 庫存表已自動新增新品項：{item_name}")
+            inv_wks.append_row([item_name, 0, 0, qty, "", note])
+        st.info(f"✨ 庫存表已自動新增品項：{item_name}")
     
     return True
 
