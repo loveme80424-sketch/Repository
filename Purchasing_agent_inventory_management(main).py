@@ -63,15 +63,24 @@ def update_data(item_name, qty, action_type, note, price_gbp):
             st.success(f"✅ 已成功更新庫存：{item_name}")
             
         else:
-            # 情況 2：新商品
-            # 欄位順序：A名稱, B英鎊, C進貨, D銷貨, E庫存(留空), F備註
-            if action_type == "進貨":
-                inv_wks.append_row([item_name, price_gbp, qty, 0])
-            else:
-                # 先銷貨：進貨填 0，銷貨填負數，E 欄必須是空字串 ""
-                inv_wks.append_row([item_name, 0, 0, -qty,])
-                
-            st.info(f"✨ 庫存表已自動新增品項：{item_name}")
+        # --- 情況 2：這是新商品 ---
+        # 為了不擋住 E 欄公式，我們「分段」填寫：先填 A-D，再填 F
+        if action_type == "進貨":
+            # 填入：[名稱, 單價, 進貨數, 0]
+            row_data = [item_name, price_gbp, qty, 0]
+        else:
+            # 填入：[名稱, 0, 0, -qty]
+            row_data = [item_name, 0, 0, -qty]
+            
+        # 執行寫入前 4 欄
+        inv_wks.append_row(row_data)
+        
+        # 如果有備註，我們單獨寫入到該行的 F 欄 (第 6 欄)
+        if note:
+            new_row_num = len(inv_wks.col_values(1)) # 取得最新一行的行號
+            inv_wks.update_cell(new_row_num, 6, note) # 6 代表 F 欄
+            
+        st.info(f"✨ 庫存表已自動新增品項：{item_name}")
         return True
     except Exception as e:
         st.error(f"寫入資料時發生錯誤: {e}")
