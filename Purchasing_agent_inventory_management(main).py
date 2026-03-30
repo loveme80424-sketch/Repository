@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # 設定網頁標題與圖示
-st.set_page_config(page_title="英國代購庫存管理", page_icon="🇬🇧")
+st.set_page_config(page_title="頑皮娘娘代購庫存管理", page_icon="🇬🇧")
 
 # 1. 初始化 Google Sheets 連線
 def init_gspread():
