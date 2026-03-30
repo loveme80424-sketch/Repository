@@ -87,7 +87,7 @@ def update_data(item_name, qty, action_type, note, price_gbp):
         return False
 
 # 3. Streamlit 介面
-st.title("🇬🇧 英國代購庫存管理系統")
+st.title("🇬🇧 頑皮娘娘代購庫存管理系統")
 
 # 查看功能
 if st.button("查看最新庫存表"):
