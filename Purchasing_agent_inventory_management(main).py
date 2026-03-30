@@ -62,7 +62,7 @@ def update_data(item_name, qty, action_type, note, price_gbp):
             inv_wks.update_cell(cell.row, col_to_update, new_val)
             st.success(f"✅ 已成功更新庫存：{item_name}")
             
-        else:
+  else:
         # --- 情況 2：這是新商品 ---
         # 為了不擋住 E 欄公式，我們「分段」填寫：先填 A-D，再填 F
         if action_type == "進貨":
