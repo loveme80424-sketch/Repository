@@ -66,10 +66,10 @@ def update_data(item_name, qty, action_type, note, price_gbp):
             # 情況 2：新商品
             # 欄位順序：A名稱, B英鎊, C進貨, D銷貨, E庫存(留空), F備註
             if action_type == "進貨":
-                inv_wks.append_row([item_name, price_gbp, qty, 0, "", note])
+                inv_wks.append_row([item_name, price_gbp, qty, 0])
             else:
                 # 先銷貨：進貨填 0，銷貨填負數，E 欄必須是空字串 ""
-                inv_wks.append_row([item_name, 0, 0, -qty, "", note])
+                inv_wks.append_row([item_name, 0, 0, -qty,])
                 
             st.info(f"✨ 庫存表已自動新增品項：{item_name}")
         return True
