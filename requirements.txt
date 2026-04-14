@@ -3,3 +3,4 @@ openpyxl
 streamlit
 st-gsheets-connection
 yfinance
+twder
