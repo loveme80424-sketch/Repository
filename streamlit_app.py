@@ -1,22 +1,25 @@
 import streamlit as st
-import yfinance as yf
+import twder
 
 # 設定網頁標題
 st.set_page_config(page_title="娃娃售價計算器", layout="centered")
 
 def get_gbp_twd_rate():
     try:
-        ticker = yf.Ticker("GBPTWD=X")
-        data = ticker.history(period="1d")
-        return round(data['Close'].iloc[-1], 2)
-    except:
-        return 42.7  # 抓取失敗時的預設值
+        # 抓取台銀所有幣別匯率
+        # twder.now('GBP') 會回傳一個 list: [時間, 現金買入, 現金賣出, 即期買入, 即期賣出]
+        rate_data = twder.now('GBP')
+        spot_selling = float(rate_data[4]) # 索引 4 是即期賣出
+        return spot_selling
+    except Exception as e:
+        # 抓取失敗時回傳一個保守的預設值
+        return 43.5 
 
 st.title("🧸 娃娃代購售價計算器")
 
-# 1. 匯率部分
+# 1. 匯率部分 (改抓台銀即期賣出)
 live_rate = get_gbp_twd_rate()
-rate = st.number_input("英鎊匯率", value=live_rate, step=0.1, help="自動抓取最新匯率，也可手動修改")
+rate = st.number_input("英鎊匯率 (台灣銀行即期賣出)", value=live_rate, step=0.1, help="自動抓取台銀最新即期賣出匯率，也可手動修改")
 
 # 2. 輸入原價
 gbp_price = st.number_input("英鎊售價 (GBP)", min_value=0.0, value=10.0, step=0.5)
